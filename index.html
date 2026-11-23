@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Keynote 浮動計時與抽組工具</title>
+  <style>
+    :root {
+      --bg-page: #0f172a;
+      --panel-bg: rgba(24, 28, 38, 0.92);
+      --panel-border: rgba(255, 255, 255, 0.14);
+      --card-bg: rgba(255, 255, 255, 0.06);
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --accent: #38bdf8;
+      --accent-strong: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+    }
+
+    body.light-theme {
+      --bg-page: #e2e8f0;
+      --panel-bg: rgba(255, 255, 255, 0.94);
+      --panel-border: rgba(15, 23, 42, 0.12);
+      --card-bg: rgba(15, 23, 42, 0.05);
+      --text-main: #0f172a;
+      --text-sub: #475569;
+      --accent: #0284c7;
+      --accent-strong: #0369a1;
+      --shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Noto Sans TC", sans-serif;
+      background: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      touch-action: manipulation;
+      overflow-x: hidden;
+    }
+
+    .floating-widget {
+      width: 100%;
+      max-width: 360px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow: hidden;
+      transition: transform 0.2s ease, max-width 0.2s ease;
+    }
+
+    /* 頂部浮動拖曳與工具列 */
+    .widget-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      cursor: grab;
+    }
+
+    .widget-header:active {
+      cursor: grabbing;
+    }
+
+    .title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      border: none;
+      background: var(--card-bg);
+      color: var(--text-main);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    .widget-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .section-card {
+      background: var(--card-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .section-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-sub);
+      letter-spacing: 0.04em;
+    }
+
+    /* 計時器區塊 */
+    .timer-display-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 4px 0 12px;
+    }
+
+    .timer-time {
+      font-size: 56px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+      letter-spacing: 0.02em;
+      transition: color 0.2s ease;
+    }
+
+    .timer-time.warning {
+      color: var(--warning);
+    }
+
+    .timer-time.danger {
+      color: var(--danger);
+      animation: pulse 0.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.03); }
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 0.2s linear, background-color 0.2s ease;
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .preset-btn {
+      border: 1px solid var(--panel-border);
+      background: transparent;
+      color: var(--text-main);
+      border-radius: 11px;
+      padding: 9px 4px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .preset-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: transparent;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 8px;
+    }
+
+    .primary-btn, .secondary-btn {
+      border: none;
+      border-radius: 13px;
+      padding: 12px 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary-btn {
+      background: var(--accent-strong);
+      color: #ffffff;
+    }
+
+    .primary-btn.running {
+      background: var(--warning);
+      color: #111827;
+    }
+
+    .secondary-btn {
+      background: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid var(--panel-border);
+    }
+
+    .primary-btn:active, .secondary-btn:active, .preset-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* 抽組別區塊 */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-main);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .toggle-wrap input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .draw-result-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      min-height: 68px;
+    }
+
+    .draw-result-label {
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .draw-result-value {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: 0.03em;
+    }
+
+    .groups-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .group-pill {
+      border: 1px solid var(--panel-border);
+      background: transparent;
+      color: var(--text-main);
+      border-radius: 12px;
+      padding: 10px 0;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .group-pill.drawn {
+      opacity: 0.35;
+      text-decoration: line-through;
+      background: rgba(148, 163, 184, 0.15);
+    }
+
+    .group-pill.current {
+      opacity: 1;
+      text-decoration: none;
+      background: var(--success);
+      color: #ffffff;
+      border-color: transparent;
+      transform: scale(1.05);
+    }
+
+    .history-line {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.5;
+      min-height: 18px;
+    }
+
+    /* 迷你模式 */
+    .floating-widget.mini-mode .preset-grid,
+    .floating-widget.mini-mode .groups-row,
+    .floating-widget.mini-mode .history-line,
+    .floating-widget.mini-mode .progress-track,
+    .floating-widget.mini-mode .toggle-wrap {
+      display: none;
+    }
+
+    .floating-widget.mini-mode .timer-time {
+      font-size: 40px;
+    }
+
+    .floating-widget.mini-mode .draw-result-box {
+      min-height: 52px;
+      padding: 8px 12px;
+    }
+
+    .floating-widget.mini-mode .draw-result-value {
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="floating-widget" id="widget">
+    <div class="widget-header" id="dragHandle">
+      <div class="title-wrap">
+        <span class="status-dot"></span>
+        <span>簡報計時 & 抽組</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="soundBtn" title="音效開關">🔊</button>
+        <button class="icon-btn" id="themeBtn" title="切換深淺主題">☀️</button>
+        <button class="icon-btn" id="miniBtn" title="切換迷你模式">精簡</button>
+      </div>
+    </div>
+
+    <div class="widget-body">
+      <!-- 倒數計時器 -->
+      <section class="section-card">
+        <div class="section-top">
+          <span class="section-label">倒數計時</span>
+          <span class="section-label" id="timerStatus">準備就緒</span>
+        </div>
+
+        <div class="timer-display-wrap">
+          <div class="timer-time" id="timerDisplay">01:00</div>
+          <div class="progress-track">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+
+        <div class="preset-grid" id="presetGrid">
+          <button class="preset-btn" data-sec="30">30秒</button>
+          <button class="preset-btn active" data-sec="60">1分</button>
+          <button class="preset-btn" data-sec="120">2分</button>
+          <button class="preset-btn" data-sec="180">3分</button>
+          <button class="preset-btn" data-sec="300">5分</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="primary-btn" id="startPauseBtn">開始計時</button>
+          <button class="secondary-btn" id="resetTimerBtn">重設</button>
+        </div>
+      </section>
+
+      <!-- 抽組別 1-5 組 -->
+      <section class="section-card">
+        <div class="section-top">
+          <span class="section-label">抽組別（1–5 組）</span>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="noRepeatToggle" checked />
+            <span>不重複</span>
+          </label>
+        </div>
+
+        <div class="draw-result-box">
+          <div>
+            <div class="draw-result-label">本次抽出</div>
+            <div class="draw-result-label" id="remainingInfo">剩餘 5 組</div>
+          </div>
+          <div class="draw-result-value" id="drawResult">待抽籤</div>
+        </div>
+
+        <div class="groups-row" id="groupsRow"></div>
+
+        <div class="btn-row">
+          <button class="primary-btn" id="drawBtn">抽出一組</button>
+          <button class="secondary-btn" id="resetGroupsBtn">重置</button>
+        </div>
+
+        <div class="history-line" id="historyLine">紀錄：尚未抽取（點選上方號碼可手動標記）</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // ===== 離線 Web Audio 音效（iPad Safari 觸控後自動解鎖）=====
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function ensureAudio() {
+      if (!soundEnabled) return null;
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playTone(freq, duration, type = 'sine', volume = 0.25, delay = 0) {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      const now = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    function playTimerEndChime() {
+      playTone(880, 0.25, 'sine', 0.3, 0);
+      playTone(1174.66, 0.25, 'sine', 0.3, 0.22);
+      playTone(1318.51, 0.55, 'sine', 0.32, 0.44);
+    }
+
+    function playDrawDoneChime() {
+      playTone(587.33, 0.14, 'triangle', 0.22, 0);
+      playTone(880, 0.32, 'triangle', 0.26, 0.12);
+    }
+
+    // ===== 計時器邏輯 =====
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerStatus = document.getElementById('timerStatus');
+    const progressBar = document.getElementById('progressBar');
+    const startPauseBtn = document.getElementById('startPauseBtn');
+    const resetTimerBtn = document.getElementById('resetTimerBtn');
+    const presetButtons = document.querySelectorAll('.preset-btn');
+
+    let totalSeconds = 60;
+    let remainingMs = totalSeconds * 1000;
+    let isRunning = false;
+    let endTimestamp = 0;
+    let timerInterval = null;
+
+    function formatTime(ms) {
+      const totalSec = Math.ceil(Math.max(0, ms) / 1000);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function updateTimerUI() {
+      timerDisplay.textContent = formatTime(remainingMs);
+      const ratio = totalSeconds > 0 ? Math.max(0, remainingMs / (totalSeconds * 1000)) : 0;
+      progressBar.style.width = `${ratio * 100}%`;
+
+      timerDisplay.classList.remove('warning', 'danger');
+      if (remainingMs <= 0) {
+        timerDisplay.classList.add('danger');
+        progressBar.style.background = 'var(--danger)';
+      } else if (remainingMs <= 10000) {
+        timerDisplay.classList.add('danger');
+        progressBar.style.background = 'var(--danger)';
+      } else if (remainingMs <= 20000 && totalSeconds >= 60) {
+        timerDisplay.classList.add('warning');
+        progressBar.style.background = 'var(--warning)';
+      } else {
+        progressBar.style.background = 'var(--accent)';
+      }
+    }
+
+    function stopTimer() {
+      isRunning = false;
+      clearInterval(timerInterval);
+      timerInterval = null;
+      startPauseBtn.textContent = remainingMs <= 0 ? '重新開始' : '繼續計時';
+      startPauseBtn.classList.remove('running');
+      if (remainingMs > 0) timerStatus.textContent = '已暫停';
+    }
+
+    function startTimer() {
+      ensureAudio();
+      if (remainingMs <= 0) {
+        remainingMs = totalSeconds * 1000;
+      }
+      isRunning = true;
+      endTimestamp = Date.now() + remainingMs;
+      startPauseBtn.textContent = '暫停';
+      startPauseBtn.classList.add('running');
+      timerStatus.textContent = '計時中';
+
+      timerInterval = setInterval(() => {
+        remainingMs = Math.max(0, endTimestamp - Date.now());
+        updateTimerUI();
+        if (remainingMs <= 0) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+          isRunning = false;
+          startPauseBtn.textContent = '重新開始';
+          startPauseBtn.classList.remove('running');
+          timerStatus.textContent = '時間到！';
+          playTimerEndChime();
+        }
+      }, 100);
+    }
+
+    startPauseBtn.addEventListener('click', () => {
+      if (isRunning) {
+        stopTimer();
+      } else {
+        startTimer();
+      }
+    });
+
+    resetTimerBtn.addEventListener('click', () => {
+      ensureAudio();
+      clearInterval(timerInterval);
+      timerInterval = null;
+      isRunning = false;
+      remainingMs = totalSeconds * 1000;
+      startPauseBtn.textContent = '開始計時';
+      startPauseBtn.classList.remove('running');
+      timerStatus.textContent = '準備就緒';
+      updateTimerUI();
+    });
+
+    presetButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ensureAudio();
+        presetButtons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        clearInterval(timerInterval);
+        timerInterval = null;
+        isRunning = false;
+        totalSeconds = Number(btn.dataset.sec);
+        remainingMs = totalSeconds * 1000;
+        startPauseBtn.textContent = '開始計時';
+        startPauseBtn.classList.remove('running');
+        timerStatus.textContent = '準備就緒';
+        updateTimerUI();
+      });
+    });
+
+    // ===== 抽組別邏輯（1-5 組，支援不重複）=====
+    const ALL_GROUPS = [1, 2, 3, 4, 5];
+    const groupsRow = document.getElementById('groupsRow');
+    const noRepeatToggle = document.getElementById('noRepeatToggle');
+    const drawResult = document.getElementById('drawResult');
+    const remainingInfo = document.getElementById('remainingInfo');
+    const drawBtn = document.getElementById('drawBtn');
+    const resetGroupsBtn = document.getElementById('resetGroupsBtn');
+    const historyLine = document.getElementById('historyLine');
+
+    let drawnSet = new Set();
+    let historyList = [];
+    let currentGroup = null;
+    let isDrawing = false;
+
+    function getAvailableGroups() {
+      if (!noRepeatToggle.checked) return [...ALL_GROUPS];
+      return ALL_GROUPS.filter((g) => !drawnSet.has(g));
+    }
+
+    function renderGroups() {
+      groupsRow.innerHTML = '';
+      ALL_GROUPS.forEach((g) => {
+        const pill = document.createElement('button');
+        pill.className = 'group-pill';
+        pill.textContent = g;
+        if (drawnSet.has(g)) pill.classList.add('drawn');
+        if (currentGroup === g) pill.classList.add('current');
+
+        // 點選號碼可手動切換已抽/未抽狀態（方便現場彈性調整）
+        pill.addEventListener('click', () => {
+          if (isDrawing) return;
+          if (drawnSet.has(g)) {
+            drawnSet.delete(g);
+            if (currentGroup === g) currentGroup = null;
+          } else {
+            drawnSet.add(g);
+          }
+          renderGroups();
+        });
+        groupsRow.appendChild(pill);
+      });
+
+      const available = getAvailableGroups();
+      if (noRepeatToggle.checked) {
+        remainingInfo.textContent = available.length > 0 ? `剩餘 ${available.length} 組` : '本輪已全抽完';
+        drawBtn.textContent = available.length > 0 ? '抽出一組' : '重置並重抽';
+      } else {
+        remainingInfo.textContent = '可重複抽取';
+        drawBtn.textContent = '抽出一組';
+      }
+
+      historyLine.textContent = historyList.length > 0
+        ? `順序：${historyList.map((g) => `第${g}組`).join(' → ')}`
+        : '紀錄：尚未抽取（點選上方號碼可手動標記）';
+    }
+
+    function resetGroups() {
+      drawnSet.clear();
+      historyList = [];
+      currentGroup = null;
+      drawResult.textContent = '待抽籤';
+      renderGroups();
+    }
+
+    drawBtn.addEventListener('click', () => {
+      if (isDrawing) return;
+      ensureAudio();
+
+      let pool = getAvailableGroups();
+      if (pool.length === 0) {
+        resetGroups();
+        pool = getAvailableGroups();
+      }
+
+      isDrawing = true;
+      drawBtn.disabled = true;
+
+      const finalGroup = pool[Math.floor(Math.random() * pool.length)];
+      let step = 0;
+      const totalSteps = 12;
+
+      const spin = setInterval(() => {
+        const preview = pool[Math.floor(Math.random() * pool.length)];
+        drawResult.textContent = `第 ${preview} 組`;
+        playTone(440 + step * 25, 0.04, 'sine', 0.12);
+        step++;
+
+        if (step >= totalSteps) {
+          clearInterval(spin);
+          currentGroup = finalGroup;
+          if (noRepeatToggle.checked) {
+            drawnSet.add(finalGroup);
+          }
+          historyList.push(finalGroup);
+          drawResult.textContent = `第 ${finalGroup} 組`;
+          playDrawDoneChime();
+          isDrawing = false;
+          drawBtn.disabled = false;
+          renderGroups();
+        }
+      }, 65);
+    });
+
+    resetGroupsBtn.addEventListener('click', () => {
+      if (isDrawing) return;
+      ensureAudio();
+      resetGroups();
+    });
+
+    noRepeatToggle.addEventListener('change', () => {
+      renderGroups();
+    });
+
+    // ===== 工具列按鈕（音效 / 主題 / 迷你模式）=====
+    const soundBtn = document.getElementById('soundBtn');
+    const themeBtn = document.getElementById('themeBtn');
+    const miniBtn = document.getElementById('miniBtn');
+    const widget = document.getElementById('widget');
+
+    soundBtn.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+      if (soundEnabled) playTone(660, 0.08, 'sine', 0.15);
+    });
+
+    themeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      themeBtn.textContent = document.body.classList.contains('light-theme') ? '🌙' : '☀️';
+    });
+
+    miniBtn.addEventListener('click', () => {
+      widget.classList.toggle('mini-mode');
+      miniBtn.textContent = widget.classList.contains('mini-mode') ? '展開' : '精簡';
+    });
+
+    // 初始化畫面
+    updateTimerUI();
+    renderGroups();
+  </script>
+</body>
+</html>
